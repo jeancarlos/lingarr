@@ -47,9 +47,9 @@ public sealed class LocalAiPluginManifest : IPluginManifest
         {
             Key = SettingKeys.Translation.LocalAi.Headers,
             Label = "Custom headers (optional)",
-            Type = PluginSettingType.Text,
+            Type = PluginSettingType.KeyValueList,
             Required = false,
-            Description = "Extra HTTP headers sent with every request, one <code>Name: Value</code> pair per line. Useful for gateways that key behaviour off a header. Lines starting with <code>#</code> are ignored."
+            Description = "Extra HTTP headers sent with every request, one `Name: Value` pair per line. Lines starting with `#` are ignored."
         }
     ];
 }
