@@ -6,5 +6,6 @@ public enum PluginSettingType
     Url,
     Secret,
     RemoteDropdown,
-    Toggle
+    Toggle,
+    KeyValueList
 }

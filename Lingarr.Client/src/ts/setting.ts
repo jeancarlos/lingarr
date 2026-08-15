@@ -21,6 +21,7 @@ export const SETTINGS = {
     LOCAL_AI_ENDPOINT: 'local_ai_endpoint',
     LOCAL_AI_MODEL: 'local_ai_model',
     LOCAL_AI_STRUCTURED_OUTPUT: 'local_ai_structured_output',
+    LOCAL_AI_HEADERS: 'local_ai_headers',
     GEMINI_MODEL: 'gemini_model',
     DEEPSEEK_MODEL: 'deepseek_model',
     MISTRAL_MODEL: 'mistral_model',
@@ -99,6 +100,7 @@ export interface ISettings {
     local_ai_endpoint: string
     local_ai_model: string
     local_ai_structured_output: string
+    local_ai_headers: string
     gemini_model: string
     deepseek_model: string
     mistral_model: string
