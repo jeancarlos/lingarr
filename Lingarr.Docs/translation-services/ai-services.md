@@ -158,5 +158,6 @@ LocalAI works with Ollama or any other OpenAI-compatible model or router.
 | `LOCAL_AI_MODEL` | The model to use for LocalAI translations.                                                                                |
 | `LOCAL_AI_API_KEY` | The API key for authenticating with LocalAI. This is optional, and only needed if the deployment requires authentication. |
 | `LOCAL_AI_ENDPOINT` | The full URL of the completion endpoint. Example: `http://ollama:11434/v1/chat/completions`.                              |
+| `LOCAL_AI_HEADERS` | Extra HTTP headers sent with every request, one `Name: Value` pair per line. Optional, and only needed for a deployment that reads a header of its own. Lines starting with `#` are ignored. |
 | `AI_PROMPT` | The system prompt template.                                                                                               |
 | `AI_USER_PROMPT` | The user message template.                                                                                                |
