@@ -248,6 +248,7 @@ public class StartupService : IHostedService
             { "LOCAL_AI_API_KEY", SettingKeys.Translation.LocalAi.ApiKey },
             { "LOCAL_AI_ENDPOINT", SettingKeys.Translation.LocalAi.Endpoint },
             { "LOCAL_AI_STRUCTURED_OUTPUT", SettingKeys.Translation.LocalAi.StructuredOutput },
+            { "LOCAL_AI_HEADERS", SettingKeys.Translation.LocalAi.Headers },
 
             { "GEMINI_MODEL", SettingKeys.Translation.Gemini.Model },
             { "GEMINI_API_KEY", SettingKeys.Translation.Gemini.ApiKey },
