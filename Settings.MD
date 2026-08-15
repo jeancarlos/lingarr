@@ -164,6 +164,7 @@ The `SOURCE_LANGUAGES` and `TARGET_LANGUAGES` variables should be provided as a 
 | `LOCAL_AI_MODEL`         | The model to use for LocalAI translations.                                      |
 | `LOCAL_AI_API_KEY`       | The API key for authenticating with LocalAI.                                    |
 | `LOCAL_AI_ENDPOINT`      | The full URL of the completion endpoint. Example: `http://ollama:11434/v1/chat/completions`. |
+| `LOCAL_AI_HEADERS`       | Extra HTTP headers sent with every request, one `Name: Value` pair per line. Lines starting with `#` are ignored. |
 | `AI_PROMPT`              | The prompt template for AI-based translation services.                          |
 | `AI_USER_PROMPT`         | The user message template. Supports `{lineToTranslate}`, `{contextBefore}` and `{contextAfter}`. |
 
