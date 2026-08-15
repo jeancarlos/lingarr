@@ -67,6 +67,7 @@ public class LocalAiService : BaseLanguageService, ITranslationService, IBatchTr
                 SettingKeys.Translation.LocalAi.Endpoint,
                 SettingKeys.Translation.LocalAi.ChatRequestTemplate,
                 SettingKeys.Translation.LocalAi.GenerateRequestTemplate,
+                SettingKeys.Translation.LocalAi.Headers,
                 SettingKeys.Translation.AiPrompt,
                 SettingKeys.Translation.AiUserPrompt,
                 SettingKeys.Translation.ProofreadPrompt,
@@ -112,6 +113,8 @@ public class LocalAiService : BaseLanguageService, ITranslationService, IBatchTr
                 _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
             }
 
+            ApplyCustomHeaders(settings.GetValueOrDefault(SettingKeys.Translation.LocalAi.Headers));
+
             _maxRetries = int.TryParse(settings[SettingKeys.Translation.MaxRetries], out var maxRetries) 
                 ? maxRetries 
                 : 5;
@@ -128,6 +131,23 @@ public class LocalAiService : BaseLanguageService, ITranslationService, IBatchTr
         finally
         {
             _initLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// Applies the configured custom headers to the client, replacing any previously set value.
+    /// A header the client rejects is logged and skipped so one bad line cannot break translation.
+    /// </summary>
+    /// <param name="headers">Header block, one "Name: Value" pair per line.</param>
+    private void ApplyCustomHeaders(string? headers)
+    {
+        foreach (var (name, value) in CustomHeaderParser.Parse(headers))
+        {
+            _httpClient.DefaultRequestHeaders.Remove(name);
+            if (!_httpClient.DefaultRequestHeaders.TryAddWithoutValidation(name, value))
+            {
+                _logger.LogWarning("Skipping custom header {HeaderName}, the HTTP client rejected it", name);
+            }
         }
     }
 

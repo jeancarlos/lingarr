@@ -42,6 +42,14 @@ public sealed class LocalAiPluginManifest : IPluginManifest
             Type = PluginSettingType.Secret,
             Required = false,
             Description = "Bearer token if the deployment requires authentication. Stored encrypted."
+        },
+        new()
+        {
+            Key = SettingKeys.Translation.LocalAi.Headers,
+            Label = "Custom headers (optional)",
+            Type = PluginSettingType.Text,
+            Required = false,
+            Description = "Extra HTTP headers sent with every request, one <code>Name: Value</code> pair per line. Useful for gateways that key behaviour off a header. Lines starting with <code>#</code> are ignored."
         }
     ];
 }
