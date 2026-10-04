@@ -2,8 +2,8 @@ using FluentMigrator;
 
 namespace Lingarr.Migrations.Migrations;
 
-[Migration(21)]
-public class M0021_SeedLocalAiHeaders : Migration
+[Migration(22)]
+public class M0022_SeedLocalAiHeaders : Migration
 {
     public override void Up()
     {
