@@ -7,6 +7,7 @@ using Lingarr.Core.Configuration;
 using Lingarr.Core.Data;
 using Lingarr.Core.Entities;
 using Lingarr.Server.Interfaces.Services;
+using Lingarr.Server.Interfaces.Services.Integration;
 using Lingarr.Server.Models;
 using Lingarr.Server.Models.FileSystem;
 using Microsoft.EntityFrameworkCore;
@@ -25,6 +26,7 @@ public abstract class MediaSubtitleProcessorTestBase : IDisposable
     protected readonly Mock<ISubtitleService> SubtitleServiceMock;
     protected readonly Mock<ISettingService> SettingServiceMock;
     protected readonly LingarrDbContext DbContext;
+    protected readonly Mock<IBazarrService> BazarrServiceMock;
     protected readonly Lingarr.Server.Services.MediaSubtitleProcessor Processor;
 
     protected MediaSubtitleProcessorTestBase()
@@ -33,6 +35,10 @@ public abstract class MediaSubtitleProcessorTestBase : IDisposable
         LoggerMock = new Mock<ILogger<IMediaSubtitleProcessor>>();
         SubtitleServiceMock = new Mock<ISubtitleService>();
         SettingServiceMock = new Mock<ISettingService>();
+        BazarrServiceMock = new Mock<IBazarrService>();
+        BazarrServiceMock
+            .Setup(b => b.ReadyToTranslate(It.IsAny<Lingarr.Core.Enum.MediaType>(), It.IsAny<int>(), It.IsAny<int?>(), It.IsAny<IReadOnlyCollection<string>>()))
+            .ReturnsAsync(true);
 
         var options = new DbContextOptionsBuilder<LingarrDbContext>()
             .UseInMemoryDatabase(databaseName: System.Guid.NewGuid().ToString())
@@ -73,7 +79,8 @@ public abstract class MediaSubtitleProcessorTestBase : IDisposable
             LoggerMock.Object,
             SettingServiceMock.Object,
             SubtitleServiceMock.Object,
-            DbContext);
+            DbContext,
+            BazarrServiceMock.Object);
     }
 
     protected async Task<Movie> CreateTestMovie(string fileName = "test.movie")

@@ -6,6 +6,7 @@ using Lingarr.Core.Data;
 using Lingarr.Core.Enum;
 using Lingarr.Core.Interfaces;
 using Lingarr.Server.Interfaces.Services;
+using Lingarr.Server.Interfaces.Services.Integration;
 using Lingarr.Server.Models;
 using Lingarr.Server.Models.FileSystem;
 using Microsoft.EntityFrameworkCore;
@@ -19,6 +20,7 @@ public class MediaSubtitleProcessor : IMediaSubtitleProcessor
     private readonly ISubtitleService _subtitleService;
     private readonly ISettingService _settingService;
     private readonly LingarrDbContext _dbContext;
+    private readonly IBazarrService _bazarrService;
     private string _hash = string.Empty;
     private IMedia _media = null!;
     private MediaType _mediaType;
@@ -28,12 +30,14 @@ public class MediaSubtitleProcessor : IMediaSubtitleProcessor
         ILogger<IMediaSubtitleProcessor> logger,
         ISettingService settingService,
         ISubtitleService subtitleService,
-        LingarrDbContext dbContext)
+        LingarrDbContext dbContext,
+        IBazarrService bazarrService)
     {
         _translationRequestService = translationRequestService;
         _settingService = settingService;
         _subtitleService = subtitleService;
         _dbContext = dbContext;
+        _bazarrService = bazarrService;
         _logger = logger;
     }
 
@@ -152,6 +156,12 @@ public class MediaSubtitleProcessor : IMediaSubtitleProcessor
             return false;
         }
 
+        var (arrId, seriesId) = await GetArrIds();
+        if (!await _bazarrService.ReadyToTranslate(_mediaType, arrId, seriesId, languagesToTranslate))
+        {
+            return false;
+        }
+
         foreach (var targetLanguage in languagesToTranslate)
         {
             await _translationRequestService.CreateRequest(new TranslateAbleSubtitle
@@ -182,6 +192,24 @@ public class MediaSubtitleProcessor : IMediaSubtitleProcessor
     /// <param name="targetLanguages">The target languages.</param>
     /// <param name="ignoreCaptions">The ignore captions setting.</param>
     /// <returns>A Base64 encoded string representing the hash of the current subtitle state.</returns>
+    private async Task<(int ArrId, int? SeriesId)> GetArrIds()
+    {
+        if (_mediaType == MediaType.Movie)
+        {
+            var radarrId = await _dbContext.Movies
+                .Where(movie => movie.Id == _media.Id)
+                .Select(movie => movie.RadarrId)
+                .FirstAsync();
+            return (radarrId, null);
+        }
+
+        var episode = await _dbContext.Episodes
+            .Where(e => e.Id == _media.Id)
+            .Select(e => new { e.SonarrId, SeriesId = e.Season.Show.SonarrId })
+            .FirstAsync();
+        return (episode.SonarrId, episode.SeriesId);
+    }
+
     private string CreateHash(
         List<Subtitles> subtitles,
         HashSet<string> sourceLanguages,
