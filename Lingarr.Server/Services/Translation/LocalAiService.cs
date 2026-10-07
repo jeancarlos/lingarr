@@ -1,4 +1,4 @@
-﻿using System.Net;
+using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
@@ -143,11 +143,19 @@ public class LocalAiService : BaseLanguageService, ITranslationService, IBatchTr
     {
         foreach (var (name, value) in CustomHeaderParser.Parse(headers))
         {
-            _httpClient.DefaultRequestHeaders.Remove(name);
-            if (!_httpClient.DefaultRequestHeaders.TryAddWithoutValidation(name, value))
+            try
             {
-                _logger.LogWarning("Skipping custom header {HeaderName}, the HTTP client rejected it", name);
+                _httpClient.DefaultRequestHeaders.Remove(name);
+                if (_httpClient.DefaultRequestHeaders.TryAddWithoutValidation(name, value))
+                {
+                    continue;
+                }
             }
+            catch (Exception ex) when (ex is FormatException or InvalidOperationException)
+            {
+            }
+
+            _logger.LogWarning("Skipping custom header {HeaderName}, the HTTP client rejected it", name);
         }
     }
 
