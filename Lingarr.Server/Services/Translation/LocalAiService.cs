@@ -33,16 +33,40 @@ public class LocalAiService : BaseLanguageService, ITranslationService, IBatchTr
     private TimeSpan _retryDelay;
     private int _retryDelayMultiplier;
 
+    private readonly Random _random;
+    private readonly Func<TimeSpan, CancellationToken, Task> _quotaDelay;
+
     public LocalAiService(
         ISettingService settings,
         HttpClient httpClient,
         ILogger<LocalAiService> logger,
         LanguageCodeService languageCodeService,
-        IRequestTemplateService requestTemplateService)
+        IRequestTemplateService requestTemplateService,
+        Random? random = null,
+        Func<TimeSpan, CancellationToken, Task>? quotaDelay = null)
         : base(settings, logger, languageCodeService)
     {
         _httpClient = httpClient;
         _requestTemplateService = requestTemplateService;
+        _random = random ?? Random.Shared;
+        _quotaDelay = quotaDelay ?? ((wait, token) => Task.Delay(wait, token));
+    }
+
+    private sealed class RateLimitedException(HttpStatusCode statusCode, TimeSpan? retryAfter)
+        : Exception($"Rate limited with status {statusCode}.")
+    {
+        public HttpStatusCode StatusCode { get; } = statusCode;
+        public TimeSpan? RetryAfter { get; } = retryAfter;
+    }
+
+    private static void ThrowIfRateLimited(HttpResponseMessage response)
+    {
+        if (response.StatusCode is HttpStatusCode.TooManyRequests or HttpStatusCode.ServiceUnavailable)
+        {
+            throw new RateLimitedException(
+                response.StatusCode,
+                QuotaRetryDelay.FromHeaders(response.Headers, DateTimeOffset.UtcNow));
+        }
     }
 
     /// <summary>
@@ -292,11 +316,38 @@ public class LocalAiService : BaseLanguageService, ITranslationService, IBatchTr
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, retry.Token);
         
         var delay = _retryDelay;
+        var quotaAttempts = 0;
         for (var attempt = 1; attempt <= _maxRetries; attempt++)
         {
             try
             {
                 return await TranslateBatchWithLocalAiApi(subtitleBatch, linked.Token);
+            }
+            catch (RateLimitedException ex)
+            {
+                quotaAttempts++;
+                if (quotaAttempts >= QuotaRetryDelay.MaxQuotaAttempts)
+                {
+                    _logger.LogError(
+                        "Quota retry budget exhausted ({StatusCode}) for batch translation", ex.StatusCode);
+                    throw new TranslationQuotaException(
+                        $"Translation gateway is out of quota ({ex.StatusCode}).",
+                        QuotaRetryDelay.ClampReschedule(ex.RetryAfter ?? _retryDelay),
+                        ex);
+                }
+
+                var wait = ex.RetryAfter ?? QuotaRetryDelay.FullJitter(_retryDelay, quotaAttempts, _random);
+                if (wait > QuotaRetryDelay.MaxInProcessWait)
+                {
+                    wait = QuotaRetryDelay.MaxInProcessWait;
+                }
+
+                _logger.LogWarning(
+                    "{ServiceName} is rate limited ({StatusCode}). Waiting {Wait} before retrying... (Quota attempt {Attempt}/{MaxAttempts})",
+                    "LocalAI", ex.StatusCode, wait, quotaAttempts, QuotaRetryDelay.MaxQuotaAttempts);
+
+                await _quotaDelay(wait, linked.Token).ConfigureAwait(false);
+                attempt--;
             }
             catch (HttpRequestException ex) when (ex.StatusCode is HttpStatusCode.TooManyRequests or HttpStatusCode.ServiceUnavailable)
             {
@@ -356,7 +407,7 @@ public class LocalAiService : BaseLanguageService, ITranslationService, IBatchTr
         {
             return await TranslateBatchWithStructuredOutput(subtitleBatch, cancellationToken);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not RateLimitedException)
         {
             _logger.LogWarning(ex, "Structured output failed, falling back to JSON parsing");
             return await TranslateBatchWithJsonParsing(subtitleBatch, cancellationToken);
@@ -424,6 +475,7 @@ public class LocalAiService : BaseLanguageService, ITranslationService, IBatchTr
         var response = await _httpClient.PostAsync(_endpoint, requestContent, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
+            ThrowIfRateLimited(response);
             var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
             _logger.LogError(
                 "LocalAI structured output batch request failed with status {StatusCode}: {ResponseContent}",
@@ -486,6 +538,7 @@ public class LocalAiService : BaseLanguageService, ITranslationService, IBatchTr
         var response = await _httpClient.PostAsync(_endpoint, requestContent, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
+            ThrowIfRateLimited(response);
             var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
             _logger.LogError(
                 "LocalAI JSON parsing batch request failed with status {StatusCode}: {ResponseContent}",
@@ -553,6 +606,7 @@ public class LocalAiService : BaseLanguageService, ITranslationService, IBatchTr
         var response = await _httpClient.PostAsync(_endpoint, content, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
+            ThrowIfRateLimited(response);
             var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
             _logger.LogError(
                 "LocalAI generate API batch request failed with status {StatusCode}: {ResponseContent}",
