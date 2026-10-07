@@ -486,6 +486,22 @@ public class SubtitleTranslationService
             candidate.Pair.Target,
             cancellationToken);
 
+        var missingItems = batchItems.Where(item => !batchResults.ContainsKey(item.Position)).ToList();
+        if (missingItems.Count > 0 && missingItems.Count < batchItems.Count)
+        {
+            _logger.LogInformation("Batch reply omitted {Count} of {Total} subtitles, requesting them again.",
+                missingItems.Count, batchItems.Count);
+            var retryResults = await candidate.Entry.BatchService.TranslateBatchAsync(
+                missingItems,
+                candidate.Pair.Source,
+                candidate.Pair.Target,
+                cancellationToken);
+            foreach (var (position, translated) in retryResults)
+            {
+                batchResults.TryAdd(position, translated);
+            }
+        }
+
         foreach (var subtitle in toTranslate)
         {
             var contentLines = stripSubtitleFormatting ? subtitle.PlaintextLines : subtitle.Lines;
