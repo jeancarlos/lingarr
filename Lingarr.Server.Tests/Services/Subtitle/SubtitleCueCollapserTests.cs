@@ -83,4 +83,43 @@ public class SubtitleCueCollapserTests
         SubtitleCueCollapser.EnforceLimit(cues, 0);
         SubtitleCueCollapser.EnforceLimit(cues, 50);
     }
+
+    private static List<SubtitleItem> Distinct(int count) =>
+        Enumerable.Range(1, count).Select(i => Cue(i, i * 2000, i * 2000 + 1000, $"line {i}")).ToList();
+
+    [Fact]
+    public void Prepare_UsesTheConfiguredLimit()
+    {
+        var settings = new Dictionary<string, string> { ["max_subtitle_cues"] = "2" };
+
+        Assert.Throws<TaskCanceledException>(() => SubtitleCueCollapser.Prepare(Distinct(3), settings));
+    }
+
+    [Fact]
+    public void Prepare_DefaultsTo3000WhenTheSettingIsMissing()
+    {
+        var settings = new Dictionary<string, string>();
+
+        Assert.Equal(3000, SubtitleCueCollapser.Prepare(Distinct(3000), settings).Count);
+        Assert.Throws<TaskCanceledException>(() => SubtitleCueCollapser.Prepare(Distinct(3001), settings));
+    }
+
+    [Fact]
+    public void Prepare_ZeroDisablesTheCap()
+    {
+        var settings = new Dictionary<string, string> { ["max_subtitle_cues"] = "0" };
+
+        Assert.Equal(5000, SubtitleCueCollapser.Prepare(Distinct(5000), settings).Count);
+    }
+
+    [Fact]
+    public void Prepare_CollapsesBeforeCounting()
+    {
+        var frames = Enumerable.Range(0, 10).Select(i => Cue(i + 1, i * 100, i * 100 + 100, "Come and save me")).ToList();
+        var settings = new Dictionary<string, string> { ["max_subtitle_cues"] = "2" };
+
+        var result = SubtitleCueCollapser.Prepare(frames, settings);
+
+        Assert.Equal(("Come and save me", 0, 1000), (Assert.Single(result).PlaintextLines[0], result[0].StartTime, result[0].EndTime));
+    }
 }

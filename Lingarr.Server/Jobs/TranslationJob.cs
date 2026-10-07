@@ -187,17 +187,12 @@ public class TranslationJob
             var translator = new SubtitleTranslationService(services, _logger, _progressService, useTranslatedContext);
             var subtitles = await _subtitleService.ReadSubtitles(request.SubtitleToTranslate);
             var cueCount = subtitles.Count;
-            subtitles = SubtitleCueCollapser.Collapse(subtitles);
+            subtitles = SubtitleCueCollapser.Prepare(subtitles, settings);
             if (subtitles.Count < cueCount)
             {
                 _logger.LogInformation("Collapsed {Before} repeated cues to {After} for request {RequestId}.",
                     cueCount, subtitles.Count, request.Id);
             }
-
-            SubtitleCueCollapser.EnforceLimit(subtitles,
-                settings.TryGetValue(SettingKeys.Translation.MaxSubtitleCues, out var maxCues) && int.TryParse(maxCues, out var limit)
-                    ? limit
-                    : SubtitleCueCollapser.DefaultMaxCues);
 
             // subtitle already carries a translation from an earlier prior run.
             // Group by Position and keep the most recent row in case the same position was used more than once.
