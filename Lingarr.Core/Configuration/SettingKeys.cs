@@ -1,4 +1,4 @@
-﻿namespace Lingarr.Core.Configuration;
+namespace Lingarr.Core.Configuration;
 
 public static class SettingKeys
 {
@@ -98,6 +98,7 @@ public static class SettingKeys
         public const string AddTranslatorInfo = "add_translator_info";
         public const string UseBatchTranslation = "use_batch_translation";
         public const string MaxBatchSize = "max_batch_size";
+        public const string MaxSubtitleCues = "max_subtitle_cues";
         public const string UseSubtitleTagging = "use_subtitle_tagging";
         public const string RemoveLanguageTag = "remove_language_tag";
         public const string SubtitleTag = "subtitle_tag";
