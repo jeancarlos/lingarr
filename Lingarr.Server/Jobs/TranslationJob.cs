@@ -30,6 +30,7 @@ public class TranslationJob
     private readonly ITranslationServiceFactory _translationServiceFactory;
     private readonly ITranslationRequestService _translationRequestService;
     private readonly ITranslationRequestEventService _eventService;
+    private readonly IPromptContextService _promptContextService;
 
     public TranslationJob(
         ILogger<TranslationJob> logger,
@@ -41,7 +42,8 @@ public class TranslationJob
         IStatisticsService statisticsService,
         ITranslationServiceFactory translationServiceFactory,
         ITranslationRequestService translationRequestService,
-        ITranslationRequestEventService eventService)
+        ITranslationRequestEventService eventService,
+        IPromptContextService promptContextService)
     {
         _logger = logger;
         _settings = settings;
@@ -53,6 +55,7 @@ public class TranslationJob
         _translationServiceFactory = translationServiceFactory;
         _translationRequestService = translationRequestService;
         _eventService = eventService;
+        _promptContextService = promptContextService;
     }
 
     [AutomaticRetry(Attempts = 0)]
@@ -184,6 +187,8 @@ public class TranslationJob
                 throw new TranslationException($"No usable translation services configured: [{string.Join(", ", serviceNames)}]");
             }
             var translationService = services[0].Service;
+            PromptContextService.Apply(services,
+                await _promptContextService.GetPromptContext(request.MediaId, request.MediaType, cancellationToken));
             var translator = new SubtitleTranslationService(services, _logger, _progressService, useTranslatedContext);
             var subtitles = await _subtitleService.ReadSubtitles(request.SubtitleToTranslate);
             var cueCount = subtitles.Count;

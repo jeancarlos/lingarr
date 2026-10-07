@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Hangfire;
@@ -167,6 +167,7 @@ public static class ServiceCollectionExtensions
         builder.Services.AddSingleton<IBazarrService, BazarrService>();
         builder.Services.AddScoped<ISubtitleService, SubtitleService>();
         builder.Services.AddScoped<ITranslationRequestService, TranslationRequestService>();
+        builder.Services.AddScoped<IPromptContextService, PromptContextService>();
         builder.Services.AddScoped<ITranslationRequestEventService, TranslationRequestEventService>();
         builder.Services.AddScoped<IMediaSubtitleProcessor, MediaSubtitleProcessor>();
         builder.Services.AddScoped<IDirectoryService, DirectoryService>();
