@@ -64,4 +64,14 @@ public class StructuredResponseNormalizerTests
     {
         Assert.Equal(string.Empty, StructuredResponseNormalizer.Normalize(string.Empty));
     }
+
+    [Fact]
+    public void Normalize_SkipsABracketInProseBeforeTheBareArray()
+    {
+        var content = "Here are the [translated] lines: [{\"position\":1,\"line\":\"Olá\"}]";
+
+        var result = StructuredResponseNormalizer.Normalize(content);
+
+        Assert.Equal("{\"translations\":[{\"position\":1,\"line\":\"Olá\"}]}", result);
+    }
 }

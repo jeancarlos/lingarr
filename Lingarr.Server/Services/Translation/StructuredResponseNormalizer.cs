@@ -17,21 +17,42 @@ public static class StructuredResponseNormalizer
             return content;
         }
 
-        var objectStart = content.IndexOf('{');
-        var arrayStart = content.IndexOf('[');
-
-        // A leading array means the model skipped the wrapper object entirely.
-        if (arrayStart != -1 && (objectStart == -1 || arrayStart < objectStart))
+        for (var start = 0; start < content.Length; start++)
         {
-            var arrayEnd = content.LastIndexOf(']');
-            return arrayEnd > arrayStart
-                ? $"{{\"translations\":{content.Substring(arrayStart, arrayEnd - arrayStart + 1)}}}"
-                : content;
+            var open = content[start];
+            if (open != '[' && open != '{')
+            {
+                continue;
+            }
+
+            var end = content.LastIndexOf(open == '[' ? ']' : '}');
+            if (end <= start)
+            {
+                continue;
+            }
+
+            var candidate = content.Substring(start, end - start + 1);
+            if (!IsJson(candidate))
+            {
+                continue;
+            }
+
+            return open == '[' ? $"{{\"translations\":{candidate}}}" : candidate;
         }
 
-        var objectEnd = content.LastIndexOf('}');
-        return objectStart != -1 && objectEnd > objectStart
-            ? content.Substring(objectStart, objectEnd - objectStart + 1)
-            : content;
+        return content;
+    }
+
+    private static bool IsJson(string candidate)
+    {
+        try
+        {
+            using var _ = System.Text.Json.JsonDocument.Parse(candidate);
+            return true;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return false;
+        }
     }
 }
