@@ -453,6 +453,7 @@ public class SubtitleService : ISubtitleService
         var sourceSubtitle = matchingSubtitles
             .Where(s => s.Language.Equals(sourceLanguage, StringComparison.OrdinalIgnoreCase))
             .OrderBy(s => string.IsNullOrEmpty(s.Caption) ? 0 : 1)
+            .ThenByDescending(s => File.Exists(s.Path) ? new FileInfo(s.Path).Length : 0)
             .FirstOrDefault();
 
         if (sourceSubtitle == null)
