@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Lingarr.Core.Configuration;
 using Lingarr.Server.Models.FileSystem;
 
 namespace Lingarr.Server.Services.Subtitle;
@@ -39,6 +40,16 @@ public static class SubtitleCueCollapser
         }
 
         return result;
+    }
+
+    public static List<SubtitleItem> Prepare(List<SubtitleItem> subtitles, IReadOnlyDictionary<string, string> settings)
+    {
+        var collapsed = Collapse(subtitles);
+        EnforceLimit(collapsed,
+            settings.TryGetValue(SettingKeys.Translation.MaxSubtitleCues, out var value) && int.TryParse(value, out var limit)
+                ? limit
+                : DefaultMaxCues);
+        return collapsed;
     }
 
     public static void EnforceLimit(List<SubtitleItem> subtitles, int limit)
