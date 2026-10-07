@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Lingarr.Contracts.Models;
 using Lingarr.Contracts.Models.Batch;
@@ -18,6 +18,7 @@ public abstract class BaseLanguageService : BaseTranslationService
     protected string? _proofreadPrompt;
     protected string? _proofreadUserPrompt;
     protected Dictionary<string, string> _replacements;
+    private PromptContext? _promptContext;
 
     protected BaseLanguageService(
         ISettingService settings,
@@ -40,6 +41,39 @@ public abstract class BaseLanguageService : BaseTranslationService
             replacements.TryGetValue(match.Groups[1].Value, out var value) ? value : match.Value);
     }
 
+    /// <summary>
+    /// Sets the per-request prompt context (media title and optional glossary) used when building prompts.
+    /// </summary>
+    public void SetPromptContext(PromptContext? promptContext)
+    {
+        _promptContext = promptContext;
+    }
+
+    private void AddPromptContext(Dictionary<string, string> replacements)
+    {
+        if (_promptContext is null)
+        {
+            return;
+        }
+
+        replacements["title"] = _promptContext.Title ?? string.Empty;
+        replacements["glossary"] = _promptContext.Glossary?.Render(
+            replacements.GetValueOrDefault("targetLanguage") ?? string.Empty) ?? string.Empty;
+    }
+
+    private string BuildSystemPrompt(Dictionary<string, string> replacements)
+    {
+        var systemPrompt = ReplacePlaceholders(_prompt, replacements);
+        if (replacements.TryGetValue("glossary", out var glossary)
+            && !string.IsNullOrEmpty(glossary)
+            && _prompt?.Contains("{glossary}") != true)
+        {
+            systemPrompt = systemPrompt.Length == 0 ? glossary : systemPrompt + "\n" + glossary;
+        }
+
+        return systemPrompt;
+    }
+
     protected Dictionary<string, string> GetReplacements(
         string model,
         string lineToTranslate,
@@ -53,7 +87,8 @@ public abstract class BaseLanguageService : BaseTranslationService
             ["contextBefore"] = string.Join("\n", contextLinesBefore ?? []),
             ["contextAfter"] = string.Join("\n", contextLinesAfter ?? [])
         };
-        var systemPrompt = ReplacePlaceholders(_prompt, replacements);
+        AddPromptContext(replacements);
+        var systemPrompt = BuildSystemPrompt(replacements);
         var userMessage = string.IsNullOrEmpty(_userPrompt)
             ? lineToTranslate
             : ReplacePlaceholders(_userPrompt, replacements);
@@ -71,7 +106,8 @@ public abstract class BaseLanguageService : BaseTranslationService
             ["contextBefore"] = string.Empty,
             ["contextAfter"] = string.Empty
         };
-        replacements["systemPrompt"] = ReplacePlaceholders(_prompt, replacements);
+        AddPromptContext(replacements);
+        replacements["systemPrompt"] = BuildSystemPrompt(replacements);
         replacements["userMessage"] = serializedBatch;
         return replacements;
     }
