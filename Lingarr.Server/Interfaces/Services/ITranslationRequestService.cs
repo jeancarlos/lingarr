@@ -1,4 +1,4 @@
-﻿using DeepL;
+using DeepL;
 using Lingarr.Core.Entities;
 using Lingarr.Core.Enum;
 using Lingarr.Server.Models;
@@ -24,6 +24,15 @@ public interface ITranslationRequestService
     /// <param name="translateAbleSubtitle">Details of the subtitle to be translated, including source and target languages</param>
     /// <returns>The ID of the created translation request</returns>
     Task<int> CreateRequest(TranslateAbleSubtitle translateAbleSubtitle);
+
+    /// <summary>
+    /// Reschedules an existing translation request after a provider quota failure,
+    /// resetting it to Pending and queueing a delayed Hangfire job.
+    /// </summary>
+    /// <param name="translationRequest">The request to reschedule</param>
+    /// <param name="delay">How long to wait before the job runs again</param>
+    /// <returns>The ID of the scheduled Hangfire job</returns>
+    Task<string> RescheduleRequest(TranslationRequest translationRequest, TimeSpan delay);
 
     /// <summary>
     /// Creates translation requests for multiple media items, handling subtitle discovery

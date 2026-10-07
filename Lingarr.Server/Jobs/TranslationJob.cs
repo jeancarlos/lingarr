@@ -298,6 +298,10 @@ public class TranslationJob
         {
             await HandleCancellation(jobName, translationRequest);
         }
+        catch (Exception ex) when (TranslationQuotaException.FindIn(ex) is { } quota)
+        {
+            await _translationRequestService.RescheduleRequest(translationRequest, quota.RetryAfter);
+        }
         catch (Exception ex)
         {
             await _translationRequestService.ClearMediaHash(translationRequest);
