@@ -1,4 +1,4 @@
-﻿using System.Security.Cryptography;
+using System.Security.Cryptography;
 using Lingarr.Contracts.Interfaces;
 using Lingarr.Contracts.Models;
 using Lingarr.Core.Configuration;
@@ -156,7 +156,13 @@ public class MediaSubtitleProcessor : IMediaSubtitleProcessor
             return false;
         }
 
-        var (arrId, seriesId) = await GetArrIds();
+        var arrIds = await GetArrIds();
+        if (arrIds == null)
+        {
+            return false;
+        }
+
+        var (arrId, seriesId) = arrIds.Value;
         if (!await _bazarrService.ReadyToTranslate(_mediaType, arrId, seriesId, languagesToTranslate))
         {
             return false;
@@ -184,30 +190,22 @@ public class MediaSubtitleProcessor : IMediaSubtitleProcessor
         return true;
     }
 
-    /// <summary>
-    /// Creates a hash of the current subtitle file state.
-    /// </summary>
-    /// <param name="subtitles">List of subtitle file paths to include in the hash.</param>
-    /// <param name="sourceLanguages">The source languages.</param>
-    /// <param name="targetLanguages">The target languages.</param>
-    /// <param name="ignoreCaptions">The ignore captions setting.</param>
-    /// <returns>A Base64 encoded string representing the hash of the current subtitle state.</returns>
-    private async Task<(int ArrId, int? SeriesId)> GetArrIds()
+    private async Task<(int ArrId, int? SeriesId)?> GetArrIds()
     {
         if (_mediaType == MediaType.Movie)
         {
-            var radarrId = await _dbContext.Movies
+            var radarrIds = await _dbContext.Movies
                 .Where(movie => movie.Id == _media.Id)
                 .Select(movie => movie.RadarrId)
-                .FirstAsync();
-            return (radarrId, null);
+                .ToListAsync();
+            return radarrIds.Count == 0 ? null : (radarrIds[0], null);
         }
 
         var episode = await _dbContext.Episodes
             .Where(e => e.Id == _media.Id)
-            .Select(e => new { e.SonarrId, SeriesId = e.Season.Show.SonarrId })
-            .FirstAsync();
-        return (episode.SonarrId, episode.SeriesId);
+            .Select(e => new { e.SonarrId, SeriesId = (int?)e.Season.Show.SonarrId })
+            .FirstOrDefaultAsync();
+        return episode == null ? null : (episode.SonarrId, episode.SeriesId);
     }
 
     private string CreateHash(

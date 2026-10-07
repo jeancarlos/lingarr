@@ -12,7 +12,7 @@ public class BazarrService : IBazarrService
     private readonly string? _apiKey;
     private readonly TimeSpan _wait;
     private readonly TimeProvider _clock;
-    private readonly ConcurrentDictionary<(MediaType, int), DateTimeOffset> _searchedAt = new();
+    private readonly ConcurrentDictionary<(MediaType, int, string), DateTimeOffset> _searchedAt = new();
 
     public BazarrService(IHttpClientFactory httpClientFactory, ILogger<BazarrService> logger)
         : this(
@@ -52,15 +52,16 @@ public class BazarrService : IBazarrService
             return true;
         }
 
-        var key = (mediaType, arrId);
-        if (_searchedAt.TryGetValue(key, out var searchedAt))
+        var unsearched = languages.Where(language => !_searchedAt.ContainsKey((mediaType, arrId, language))).ToList();
+        if (unsearched.Count == 0)
         {
-            return _clock.GetUtcNow() - searchedAt >= _wait;
+            var now = _clock.GetUtcNow();
+            return languages.All(language => now - _searchedAt[(mediaType, arrId, language)] >= _wait);
         }
 
         try
         {
-            foreach (var language in languages)
+            foreach (var language in unsearched)
             {
                 var target = mediaType == MediaType.Movie
                     ? $"movies/subtitles?radarrid={arrId}"
@@ -81,10 +82,15 @@ public class BazarrService : IBazarrService
             return false;
         }
 
-        _searchedAt[key] = _clock.GetUtcNow();
+        var searchedAt = _clock.GetUtcNow();
+        foreach (var language in unsearched)
+        {
+            _searchedAt[(mediaType, arrId, language)] = searchedAt;
+        }
+
         _logger.LogInformation(
             "Asked Bazarr to search {Languages} for {MediaType} {ArrId}; translating after {Wait} minutes if still missing",
-            string.Join(", ", languages), mediaType, arrId, _wait.TotalMinutes);
+            string.Join(", ", unsearched), mediaType, arrId, _wait.TotalMinutes);
         return false;
     }
 
