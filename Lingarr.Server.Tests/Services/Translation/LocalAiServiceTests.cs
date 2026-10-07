@@ -196,7 +196,7 @@ public class LocalAiServiceTests
         Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json")
     };
 
-    private void UseSettings(string endpoint, string structuredOutput = "true")
+    private void UseSettings(string endpoint, string structuredOutput = "true", string? headers = null)
     {
         var settings = new Dictionary<string, string>
         {
@@ -213,6 +213,11 @@ public class LocalAiServiceTests
             { SettingKeys.Translation.RetryDelayMultiplier, "1" },
             { SettingKeys.Translation.LanguageCodeFormat, "false" }
         };
+
+        if (headers != null)
+        {
+            settings[SettingKeys.Translation.LocalAi.Headers] = headers;
+        }
 
         _settingsMock.Setup(settingService => settingService.GetSettings(It.IsAny<IEnumerable<string>>()))
             .ReturnsAsync(settings);
@@ -279,5 +284,22 @@ public class LocalAiServiceTests
                 It.IsAny<Exception>(),
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             times);
+    }
+
+    [Fact]
+    public async Task TranslateBatchAsync_ShouldSkipInvalidCustomHeaders_AndStillSendTheValidOnes()
+    {
+        UseSettings(ChatEndpoint, headers: "Bad Header: x\nContent-Type: text/plain\nX-Good: yes");
+        HttpRequestMessage? sent = null;
+        _httpMessageHandlerMock.Protected()
+            .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
+            .Callback<HttpRequestMessage, CancellationToken>((request, _) => sent ??= request)
+            .Returns(() => Task.FromResult(ChatResponse("{\"translations\":" + ValidJson + "}")));
+
+        var result = await _service.TranslateBatchAsync(Batch(), "en", "es", CancellationToken.None);
+
+        Assert.Equal(2, result.Count);
+        Assert.True(sent!.Headers.TryGetValues("X-Good", out var values));
+        Assert.Equal("yes", Assert.Single(values));
     }
 }
