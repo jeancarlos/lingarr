@@ -1,4 +1,4 @@
-﻿using DeepL;
+using DeepL;
 using Hangfire;
 using Lingarr.Contracts.Exceptions;
 using Lingarr.Contracts.Models;
@@ -188,6 +188,24 @@ public class TranslationRequestService : ITranslationRequestService
         return translationRequestCopy.Id;
     }
     
+    /// <inheritdoc />
+    public async Task<string> RescheduleRequest(TranslationRequest translationRequest, TimeSpan delay)
+    {
+        var jobId = _backgroundJobClient.Schedule<TranslationJob>(
+            job => job.Execute(translationRequest, CancellationToken.None),
+            delay);
+        await UpdateTranslationRequest(translationRequest, TranslationStatus.Pending, jobId);
+        await _eventService.LogEvent(translationRequest.Id, TranslationStatus.Pending,
+            $"Rescheduled after a quota failure, retrying in {delay}.");
+        await UpdateActiveCount();
+
+        _logger.LogWarning(
+            "Translation request {RequestId} rescheduled in {Delay} after a quota failure.",
+            translationRequest.Id, delay);
+
+        return jobId;
+    }
+
     /// <inheritdoc />
     public async Task CreateBulkRequest(BulkTranslateRequest request)
     {
