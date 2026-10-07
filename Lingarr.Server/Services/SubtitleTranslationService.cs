@@ -434,6 +434,7 @@ public class SubtitleTranslationService
         }
 
         Exception? lastError = null;
+        TranslationQuotaException? quotaError = null;
         foreach (var candidate in capableCandidates)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -455,11 +456,12 @@ public class SubtitleTranslationService
             catch (Exception ex)
             {
                 lastError = ex;
+                quotaError ??= TranslationQuotaException.FindIn(ex);
                 _logger.LogWarning(ex, "Batch translation service {Service} failed.", candidate.Entry.Name);
             }
         }
 
-        throw new TranslationException("All configured batch translation services failed.", lastError);
+        throw new TranslationException("All configured batch translation services failed.", quotaError ?? lastError);
     }
 
     private async Task RunBatch(

@@ -933,5 +933,43 @@ public class SubtitleTranslationServiceTests
                 CancellationToken.None));
     }
 
+
+    [Fact]
+    public async Task ProcessSubtitleBatch_PreservesQuotaFailure_WhenALaterServiceAlsoFails()
+    {
+        // Arrange
+        var quota = new TranslationQuotaException("out of quota", TimeSpan.FromMinutes(10));
+        var quotaBatch = new Mock<IBatchTranslationService>();
+        quotaBatch.Setup(batch => batch.TranslateBatchAsync(
+                It.IsAny<List<BatchSubtitleItem>>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(quota);
+        var failingBatch = new Mock<IBatchTranslationService>();
+        failingBatch.Setup(batch => batch.TranslateBatchAsync(
+                It.IsAny<List<BatchSubtitleItem>>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new TranslationException("boom"));
+
+        var pair = new LanguagePair { Source = "en", Target = "es", Tier = MatchTier.Exact };
+        var progressServiceMock = new Mock<IProgressService>();
+        var service = new SubtitleTranslationService(
+            [
+                new TranslationServiceEntry("localai", MockService(pair, _ => "unused").Object, quotaBatch.Object),
+                new TranslationServiceEntry("gemini", MockService(pair, _ => "unused").Object, failingBatch.Object)
+            ],
+            NullLogger.Instance,
+            progressServiceMock.Object);
+
+        // Act
+        var exception = await Assert.ThrowsAsync<TranslationException>(() =>
+            service.ProcessSubtitleBatch([Subtitle(1, "hello")], "en", "es",
+                stripSubtitleFormatting: false,
+                preserveLineBreaks: false,
+                CancellationToken.None));
+
+        // Assert
+        var found = TranslationQuotaException.FindIn(exception);
+        Assert.NotNull(found);
+        Assert.Equal(TimeSpan.FromMinutes(10), found!.RetryAfter);
+    }
+
     #endregion
 }

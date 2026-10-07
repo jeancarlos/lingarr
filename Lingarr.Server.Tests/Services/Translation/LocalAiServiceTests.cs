@@ -228,6 +228,137 @@ public class LocalAiServiceTests
             times);
     }
 
+    private LocalAiService CreateServiceWithRecordedWaits(List<TimeSpan> waits) =>
+        new(
+            _settingsMock.Object,
+            new HttpClient(_httpMessageHandlerMock.Object),
+            _loggerMock.Object,
+            new LanguageCodeService(),
+            new RequestTemplateService(),
+            new Random(42),
+            (wait, _) =>
+            {
+                waits.Add(wait);
+                return Task.CompletedTask;
+            });
+
+    private static HttpResponseMessage QuotaResponse(HttpStatusCode statusCode, string? retryAfter = null)
+    {
+        var response = new HttpResponseMessage
+        {
+            StatusCode = statusCode,
+            Content = new StringContent(
+                "{\"error\":{\"message\":\"You exceeded your current quota\"}}",
+                Encoding.UTF8,
+                "application/json")
+        };
+
+        if (retryAfter != null)
+        {
+            response.Headers.TryAddWithoutValidation("Retry-After", retryAfter);
+        }
+
+        return response;
+    }
+
+    [Fact]
+    public async Task TranslateBatchAsync_ShouldRetryAndSucceed_WhenGatewayReportsQuotaExhaustion()
+    {
+        // Arrange
+        UseSettings(GenerateEndpoint);
+        var waits = new List<TimeSpan>();
+        var service = CreateServiceWithRecordedWaits(waits);
+        SetupResponseSequence(
+            QuotaResponse(HttpStatusCode.ServiceUnavailable, "0"),
+            QuotaResponse(HttpStatusCode.TooManyRequests, "0"),
+            GenerateResponse(ValidJson));
+
+        // Act
+        var result = await service.TranslateBatchAsync(Batch(), "en", "es", CancellationToken.None);
+
+        // Assert
+        Assert.Equal(2, result.Count);
+        Assert.Equal("Hola", result[1]);
+        VerifyRequestsSent(3);
+        Assert.Equal(2, waits.Count);
+    }
+
+    [Fact]
+    public async Task TranslateBatchAsync_ShouldWaitRetryAfter_CappedAtFiveMinutes()
+    {
+        // Arrange
+        UseSettings(GenerateEndpoint);
+        var waits = new List<TimeSpan>();
+        var service = CreateServiceWithRecordedWaits(waits);
+        SetupResponseSequence(
+            QuotaResponse(HttpStatusCode.ServiceUnavailable, "120"),
+            QuotaResponse(HttpStatusCode.ServiceUnavailable, "100000"),
+            GenerateResponse(ValidJson));
+
+        // Act
+        await service.TranslateBatchAsync(Batch(), "en", "es", CancellationToken.None);
+
+        // Assert
+        Assert.Equal(new[] { TimeSpan.FromSeconds(120), TimeSpan.FromMinutes(5) }, waits);
+    }
+
+    [Fact]
+    public async Task TranslateBatchAsync_ShouldThrowQuotaException_WhenQuotaBudgetIsExhausted()
+    {
+        // Arrange
+        UseSettings(GenerateEndpoint);
+        var waits = new List<TimeSpan>();
+        var service = CreateServiceWithRecordedWaits(waits);
+        SetupResponse(() => QuotaResponse(HttpStatusCode.ServiceUnavailable, "186372"));
+
+        // Act
+        var exception = await Assert.ThrowsAsync<TranslationQuotaException>(
+            () => service.TranslateBatchAsync(Batch(), "en", "es", CancellationToken.None));
+
+        // Assert - 186372s exceeds the six hour reschedule ceiling, and the quota budget
+        // is independent of MaxRetries (3): all four quota attempts send a request.
+        Assert.Equal(TimeSpan.FromHours(6), exception.RetryAfter);
+        VerifyRequestsSent(4);
+        Assert.Equal(3, waits.Count);
+    }
+
+    [Fact]
+    public async Task TranslateBatchAsync_ShouldClampShortResetToMinimumReschedule_WhenQuotaBudgetIsExhausted()
+    {
+        // Arrange
+        UseSettings(GenerateEndpoint);
+        var service = CreateServiceWithRecordedWaits([]);
+        SetupResponse(() => QuotaResponse(HttpStatusCode.TooManyRequests, "1"));
+
+        // Act
+        var exception = await Assert.ThrowsAsync<TranslationQuotaException>(
+            () => service.TranslateBatchAsync(Batch(), "en", "es", CancellationToken.None));
+
+        // Assert
+        Assert.Equal(TimeSpan.FromMinutes(5), exception.RetryAfter);
+    }
+
+    [Fact]
+    public async Task TranslateBatchAsync_ShouldNotFallBackToJsonParsing_WhenChatApiIsRateLimited()
+    {
+        // Arrange
+        UseSettings(ChatEndpoint);
+        var waits = new List<TimeSpan>();
+        var service = CreateServiceWithRecordedWaits(waits);
+        SetupResponseSequence(
+            QuotaResponse(HttpStatusCode.ServiceUnavailable, "0"),
+            ChatResponse("{\"translations\":" + ValidJson + "}"));
+
+        // Act
+        var result = await service.TranslateBatchAsync(Batch(), "en", "es", CancellationToken.None);
+
+        // Assert - the rate-limited attempt must not issue a second request through the
+        // JSON parsing fallback; the single wait proves the quota path handled it.
+        Assert.Equal(2, result.Count);
+        VerifyRequestsSent(2);
+        Assert.Single(waits);
+    }
+
     [Fact]
     public async Task TranslateBatchAsync_ShouldSkipInvalidCustomHeaders_AndStillSendTheValidOnes()
     {
