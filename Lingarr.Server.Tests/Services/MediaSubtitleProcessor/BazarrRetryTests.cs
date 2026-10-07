@@ -39,7 +39,7 @@ public class BazarrRetryTests : MediaSubtitleProcessorTestBase
             .Setup(b => b.ReadyToTranslate(MediaType.Movie, radarrId, null, It.IsAny<IReadOnlyCollection<string>>()))
             .ReturnsAsync(false);
 
-        var result = await Processor.ProcessMedia(await DbContext.Movies.FindAsync(1), MediaType.Movie);
+        var result = await Processor.ProcessMedia((await DbContext.Movies.FindAsync(1))!, MediaType.Movie);
 
         Assert.False(result);
         TranslationRequestServiceMock.Verify(t => t.CreateRequest(It.IsAny<TranslateAbleSubtitle>()), Times.Never);
@@ -53,7 +53,7 @@ public class BazarrRetryTests : MediaSubtitleProcessorTestBase
             .Setup(b => b.ReadyToTranslate(It.IsAny<MediaType>(), It.IsAny<int>(), It.IsAny<int?>(), It.IsAny<IReadOnlyCollection<string>>()))
             .ReturnsAsync(false);
 
-        await Processor.ProcessMedia(await DbContext.Movies.FindAsync(1), MediaType.Movie);
+        await Processor.ProcessMedia((await DbContext.Movies.FindAsync(1))!, MediaType.Movie);
 
         Assert.Null((await DbContext.Movies.FindAsync(1))!.MediaHash);
     }
@@ -92,12 +92,29 @@ public class BazarrRetryTests : MediaSubtitleProcessorTestBase
     {
         var radarrId = await ArrangeMovieMissingTarget();
 
-        var result = await Processor.ProcessMedia(await DbContext.Movies.FindAsync(1), MediaType.Movie);
+        var result = await Processor.ProcessMedia((await DbContext.Movies.FindAsync(1))!, MediaType.Movie);
 
         Assert.True(result);
         BazarrServiceMock.Verify(b => b.ReadyToTranslate(
             MediaType.Movie, radarrId, null,
             It.Is<IReadOnlyCollection<string>>(l => l.Count == 1 && l.Contains("ro"))), Times.Once);
         TranslationRequestServiceMock.Verify(t => t.CreateRequest(It.IsAny<TranslateAbleSubtitle>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ProcessMedia_WhenTheMovieWasDeletedMeanwhile_ShouldSkipWithoutThrowing()
+    {
+        await ArrangeMovieMissingTarget();
+        BazarrServiceMock
+            .Setup(b => b.ReadyToTranslate(It.IsAny<MediaType>(), It.IsAny<int>(), It.IsAny<int?>(), It.IsAny<IReadOnlyCollection<string>>()))
+            .ReturnsAsync(true);
+        var movie = (await DbContext.Movies.FindAsync(1))!;
+        DbContext.Movies.Remove(movie);
+        await DbContext.SaveChangesAsync();
+
+        var result = await Processor.ProcessMedia(movie, MediaType.Movie);
+
+        Assert.False(result);
+        TranslationRequestServiceMock.Verify(t => t.CreateRequest(It.IsAny<TranslateAbleSubtitle>()), Times.Never);
     }
 }

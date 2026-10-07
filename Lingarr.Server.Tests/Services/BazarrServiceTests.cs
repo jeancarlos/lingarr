@@ -106,4 +106,18 @@ public class BazarrServiceTests
     [InlineData("es-MX", "es")]
     public void MapsLingarrCodesToBazarrCodes(string lingarr, string bazarr) =>
         Assert.Equal(bazarr, BazarrService.ToBazarrCode(lingarr));
+
+    [Fact]
+    public async Task NewLanguageForAnAlreadySearchedItem_AsksBazarrForThatLanguage()
+    {
+        var service = Service();
+        await service.ReadyToTranslate(MediaType.Episode, 42, 7, new[] { "pt-BR" });
+        _clock.Now += TimeSpan.FromMinutes(31);
+
+        var ready = await service.ReadyToTranslate(MediaType.Episode, 42, 7, new[] { "pt-BR", "es" });
+
+        Assert.False(ready);
+        Assert.Equal(2, _http.Requests.Count);
+        Assert.Equal("es", System.Web.HttpUtility.ParseQueryString(_http.Requests[1].RequestUri!.Query)["language"]);
+    }
 }
