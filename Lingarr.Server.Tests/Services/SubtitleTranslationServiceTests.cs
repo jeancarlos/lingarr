@@ -787,6 +787,33 @@ public class SubtitleTranslationServiceTests
         Assert.Equal(["hello", "world"], subtitles[0].TranslatedLines);
     }
 
+    [Fact]
+    public async Task ProcessSubtitleBatch_PartialReply_RequestsOnlyMissingPositionsAgain()
+    {
+        // Arrange
+        List<List<int>> calls = [];
+        var harness = CreateBatchHarness(items =>
+        {
+            calls.Add(items.Select(i => i.Position).ToList());
+            return calls.Count == 1
+                ? new Dictionary<int, string> { [1] = "ola" }
+                : items.ToDictionary(i => i.Position, _ => "mundo");
+        });
+        var subtitles = new List<SubtitleItem> { Subtitle(1, "hello"), Subtitle(2, "world") };
+
+        // Act
+        await harness.Service.ProcessSubtitleBatch(subtitles,
+            "en", "pt",
+            stripSubtitleFormatting: false,
+            preserveLineBreaks: false,
+            CancellationToken.None);
+
+        // Assert
+        Assert.Equal([[1, 2], [2]], calls);
+        Assert.Equal(["ola"], subtitles[0].TranslatedLines);
+        Assert.Equal(["mundo"], subtitles[1].TranslatedLines);
+    }
+
     #endregion
 
     #region Chain-wide best-match resolution
