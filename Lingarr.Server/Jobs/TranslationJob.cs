@@ -1,6 +1,7 @@
 using Hangfire;
 using Lingarr.Contracts.Exceptions;
 using Lingarr.Contracts.Translation;
+using Lingarr.Server.Exceptions;
 using Lingarr.Core.Configuration;
 using Lingarr.Core.Data;
 using Lingarr.Core.Entities;
@@ -176,7 +177,7 @@ public class TranslationJob
                 if (!_subtitleService.ValidateSubtitle(request.SubtitleToTranslate, validationOptions))
                 {
                     _logger.LogWarning("Subtitle is not valid according to configured preferences.");
-                    throw new TaskCanceledException("Subtitle is not valid according to configured preferences.");
+                    throw new SubtitleRejectedException("Subtitle is not valid according to configured preferences.");
                 }
             }
 
@@ -299,9 +300,9 @@ public class TranslationJob
             await WriteSubtitles(request, translatedSubtitles, stripSubtitleFormatting, subtitleTag, removeLanguageTag);
             await HandleCompletion(jobName, request, cancellationToken);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException ex)
         {
-            await HandleCancellation(jobName, translationRequest);
+            await HandleCancellation(jobName, translationRequest, ex as SubtitleRejectedException);
         }
         catch (Exception ex) when (TranslationQuotaException.FindIn(ex) is { } quota)
         {
@@ -368,7 +369,7 @@ public class TranslationJob
         await _scheduleService.UpdateJobState(jobName, JobStatus.Succeeded.GetDisplayName());
     }
 
-    private async Task HandleCancellation(string jobName, TranslationRequest request)
+    private async Task HandleCancellation(string jobName, TranslationRequest request, SubtitleRejectedException? rejected = null)
     {
         _logger.LogInformation("Translation cancelled for subtitle: |Orange|{subtitlePath}|/Orange|",
             request.SubtitleToTranslate);
@@ -380,11 +381,14 @@ public class TranslationJob
         {
             translationRequest.CompletedAt = DateTimeOffset.UtcNow;
             translationRequest.Status = TranslationStatus.Cancelled;
-            translationRequest.ErrorMessage = "Translation was cancelled";
+            translationRequest.ErrorMessage = rejected?.Message ?? "Translation was cancelled";
             await _dbContext.SaveChangesAsync();
-            await _eventService.LogEvent(translationRequest.Id, TranslationStatus.Cancelled, "Translation was cancelled");
+            await _eventService.LogEvent(translationRequest.Id, TranslationStatus.Cancelled, translationRequest.ErrorMessage);
 
-            await _translationRequestService.ClearMediaHash(translationRequest);
+            if (rejected is null)
+            {
+                await _translationRequestService.ClearMediaHash(translationRequest);
+            }
             await _translationRequestService.UpdateActiveCount();
             await _progressService.Emit(translationRequest, 0);
             await _scheduleService.UpdateJobState(jobName, JobStatus.Cancelled.GetDisplayName());
