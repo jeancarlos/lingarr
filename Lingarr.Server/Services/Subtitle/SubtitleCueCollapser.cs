@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Lingarr.Core.Configuration;
+using Lingarr.Server.Exceptions;
 using Lingarr.Server.Models.FileSystem;
 
 namespace Lingarr.Server.Services.Subtitle;
@@ -56,7 +57,7 @@ public static class SubtitleCueCollapser
     {
         if (limit > 0 && subtitles.Count > limit)
         {
-            throw new TaskCanceledException(
+            throw new SubtitleRejectedException(
                 $"Subtitle has {subtitles.Count} cues after collapsing repeats, above the max_subtitle_cues limit of {limit}.");
         }
     }
