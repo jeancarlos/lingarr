@@ -1,3 +1,4 @@
+using Lingarr.Server.Exceptions;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -69,7 +70,7 @@ public class SubtitleCueCollapserTests
     {
         var cues = Enumerable.Range(1, 11).Select(i => Cue(i, i * 2000, i * 2000 + 1000, $"line {i}")).ToList();
 
-        var ex = Assert.Throws<TaskCanceledException>(() => SubtitleCueCollapser.EnforceLimit(cues, 10));
+        var ex = Assert.Throws<SubtitleRejectedException>(() => SubtitleCueCollapser.EnforceLimit(cues, 10));
 
         Assert.Contains("11", ex.Message);
         await Task.CompletedTask;
@@ -92,7 +93,7 @@ public class SubtitleCueCollapserTests
     {
         var settings = new Dictionary<string, string> { ["max_subtitle_cues"] = "2" };
 
-        Assert.Throws<TaskCanceledException>(() => SubtitleCueCollapser.Prepare(Distinct(3), settings));
+        Assert.Throws<SubtitleRejectedException>(() => SubtitleCueCollapser.Prepare(Distinct(3), settings));
     }
 
     [Fact]
@@ -101,7 +102,7 @@ public class SubtitleCueCollapserTests
         var settings = new Dictionary<string, string>();
 
         Assert.Equal(3000, SubtitleCueCollapser.Prepare(Distinct(3000), settings).Count);
-        Assert.Throws<TaskCanceledException>(() => SubtitleCueCollapser.Prepare(Distinct(3001), settings));
+        Assert.Throws<SubtitleRejectedException>(() => SubtitleCueCollapser.Prepare(Distinct(3001), settings));
     }
 
     [Fact]
