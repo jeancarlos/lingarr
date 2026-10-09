@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Hangfire;
+using Hangfire.MemoryStorage;
 using Hangfire.MySql;
 using Hangfire.PostgreSql;
 using Hangfire.Storage.SQLite;
@@ -255,8 +256,17 @@ public static class ServiceCollectionExtensions
                 .UseRecommendedSerializerSettings();
 
             var dbConnection = DatabaseConfiguration.GetDbConnection();
+            if (string.Equals(Environment.GetEnvironmentVariable("DB_HANGFIRE_STORAGE"), "memory",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                configuration.UseMemoryStorage();
+                dbConnection = "memory";
+            }
+
             switch (dbConnection)
             {
+                case "memory":
+                    break;
                 case "mysql":
                     ConfigureMySqlStorage(configuration, tablePrefix);
                     break;
