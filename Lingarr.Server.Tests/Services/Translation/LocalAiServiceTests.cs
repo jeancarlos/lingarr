@@ -116,6 +116,24 @@ public class LocalAiServiceTests
     }
 
     [Fact]
+    public async Task TranslateBatchAsync_ShouldRetry_WhenChatApiReturnsEmptyContent()
+    {
+        UseSettings(ChatEndpoint);
+
+        SetupResponseSequence(
+            ChatResponse(""),
+            ChatResponse(""),
+            ChatResponse("{\"translations\":" + ValidJson + "}"));
+
+        var result = await _service.TranslateBatchAsync(Batch(), "en", "es", CancellationToken.None);
+
+        Assert.Equal(2, result.Count);
+        Assert.Equal("Mundo", result[2]);
+        VerifyRequestsSent(3);
+        VerifyWarningLogged("returned an unparsable response", Times.Once());
+    }
+
+    [Fact]
     public async Task TranslateBatchAsync_ShouldNotRetry_WhenRequestFailsWithNonRetryableStatus()
     {
         // Arrange
