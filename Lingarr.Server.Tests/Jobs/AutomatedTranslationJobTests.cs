@@ -13,7 +13,6 @@ using Lingarr.Server.Jobs;
 using Lingarr.Server.Models;
 using Lingarr.Server.Services;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
@@ -40,6 +39,43 @@ public class AutomatedTranslationJobTests
             Assert.True(result);
             Assert.Single(processor.ProcessedTitles);
             Assert.Equal(movies[^1].Title, processor.ProcessedTitles.Single());
+        }
+        finally
+        {
+            tempDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ProcessMovies_ResumesFromIndexStoredInDatabase()
+    {
+        var tempDirectory = Directory.CreateTempSubdirectory();
+        try
+        {
+            var dbContext = BuildContext();
+            await using var context = dbContext;
+
+            var movies = new List<Movie>
+            {
+                CreateMovie(1, "Old Movie 1", tempDirectory.FullName, TimeSpan.FromHours(80)),
+                CreateMovie(2, "Old Movie 2", tempDirectory.FullName, TimeSpan.FromHours(80)),
+                CreateMovie(3, "Old Movie 3", tempDirectory.FullName, TimeSpan.FromHours(80))
+            };
+            context.Movies.AddRange(movies);
+            context.Settings.Add(new Setting { Key = "Automation:MovieProcessingIndex", Value = "1" });
+            await context.SaveChangesAsync();
+
+            var processor = new RecordingMediaSubtitleProcessor();
+            var job = CreateJob(context, processor);
+            ConfigureJobForMovies(job);
+
+            var result = await InvokeProcessMoviesAsync(job);
+
+            Assert.True(result);
+            Assert.Equal("Old Movie 2", Assert.Single(processor.ProcessedTitles));
+            var stored = await context.Settings
+                .SingleAsync(setting => setting.Key == "Automation:MovieProcessingIndex");
+            Assert.Equal("2", stored.Value);
         }
         finally
         {
@@ -97,8 +133,7 @@ public class AutomatedTranslationJobTests
             NullLogger<AutomatedTranslationJob>.Instance,
             processor,
             new NoOpScheduleService(),
-            new NoOpSettingService(),
-            new MemoryCache(new MemoryCacheOptions()));
+            new NoOpSettingService());
     }
 
     private static void ConfigureJobForMovies(AutomatedTranslationJob job)

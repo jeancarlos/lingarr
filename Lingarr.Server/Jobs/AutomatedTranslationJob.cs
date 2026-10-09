@@ -1,12 +1,12 @@
-﻿using Hangfire;
+using Hangfire;
 using Lingarr.Core.Configuration;
 using Lingarr.Core.Data;
+using Lingarr.Core.Entities;
 using Lingarr.Core.Enum;
 using Lingarr.Core.Interfaces;
 using Lingarr.Server.Filters;
 using Lingarr.Server.Interfaces.Services;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.OpenApi.Extensions;
 
 namespace Lingarr.Server.Jobs;
@@ -18,7 +18,6 @@ public class AutomatedTranslationJob
     private readonly IMediaSubtitleProcessor _mediaSubtitleProcessor;
     private readonly ISettingService _settingService;
     private readonly IScheduleService _scheduleService;
-    private readonly IMemoryCache _memoryCache;
     private int _maxTranslationsPerRun = 10;
     private TimeSpan _defaultMovieAgeThreshold;
     private TimeSpan _defaultShowAgeThreshold;
@@ -31,15 +30,13 @@ public class AutomatedTranslationJob
         ILogger<AutomatedTranslationJob> logger,
         IMediaSubtitleProcessor mediaSubtitleProcessor,
         IScheduleService scheduleService,
-        ISettingService settingService,
-        IMemoryCache memoryCache)
+        ISettingService settingService)
     {
         _dbContext = dbContext;
         _logger = logger;
         _settingService = settingService;
         _scheduleService = scheduleService;
         _mediaSubtitleProcessor = mediaSubtitleProcessor;
-        _memoryCache = memoryCache;
     }
 
     [DisableConcurrentExecution(timeoutInSeconds: 10 * 60)]
@@ -159,7 +156,7 @@ public class AutomatedTranslationJob
         
         // Instead of a random selection based on updatedAt, we will use a cycle so that all shows are processed.
         // Hopefully, this will prevent some shows from not being processed at all.
-        var currentIndex = GetProcessingIndex(MovieProcessingIndexKey);
+        var currentIndex = await GetProcessingIndex(MovieProcessingIndexKey);
         if (currentIndex >= movies.Count)
         {
             currentIndex = 0;
@@ -216,7 +213,7 @@ public class AutomatedTranslationJob
         }
 
         var newIndex = index % movies.Count;
-        SetProcessingIndex(MovieProcessingIndexKey, newIndex);
+        await SetProcessingIndex(MovieProcessingIndexKey, newIndex);
 
         return translationsInitiated;
     }
@@ -247,7 +244,7 @@ public class AutomatedTranslationJob
 
         // Instead of a random selection based on updatedAt, we will use a cycle so that all shows are processed.
         // Hopefully, this will prevent some shows from not being processed at all.
-        var currentIndex = GetProcessingIndex(ShowProcessingIndexKey);
+        var currentIndex = await GetProcessingIndex(ShowProcessingIndexKey);
         if (currentIndex >= episodes.Count)
         {
             currentIndex = 0;
@@ -308,27 +305,28 @@ public class AutomatedTranslationJob
         }
 
         var newIndex = episodeIndex % episodes.Count;
-        SetProcessingIndex(ShowProcessingIndexKey, newIndex);
+        await SetProcessingIndex(ShowProcessingIndexKey, newIndex);
 
         return translationsInitiated;
     }
 
-    private int GetProcessingIndex(string key)
+    private async Task<int> GetProcessingIndex(string key)
     {
-        if (!_memoryCache.TryGetValue(key, out int currentIndex))
-        {
-            currentIndex = 0;
-        }
-        return currentIndex;
+        var setting = await _dbContext.Settings.FirstOrDefaultAsync(s => s.Key == key);
+        return setting != null && int.TryParse(setting.Value, out var currentIndex) ? currentIndex : 0;
     }
-    
-    private void SetProcessingIndex(string key, int value)
+
+    private async Task SetProcessingIndex(string key, int value)
     {
-        var cacheOptions = new MemoryCacheEntryOptions
+        var setting = await _dbContext.Settings.FirstOrDefaultAsync(s => s.Key == key);
+        if (setting == null)
         {
-            Priority = CacheItemPriority.NeverRemove
-        };
-        
-        _memoryCache.Set(key, value, cacheOptions);
+            _dbContext.Settings.Add(new Setting { Key = key, Value = value.ToString() });
+        }
+        else
+        {
+            setting.Value = value.ToString();
+        }
+        await _dbContext.SaveChangesAsync();
     }
 }
