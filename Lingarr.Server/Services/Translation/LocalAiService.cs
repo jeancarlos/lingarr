@@ -501,6 +501,10 @@ public class LocalAiService : BaseLanguageService, ITranslationService, IBatchTr
         }
 
         var translatedJson = chatResponse.Choices[0].Message.Content;
+        if (string.IsNullOrWhiteSpace(translatedJson))
+        {
+            throw new TranslationParseException("LocalAI returned an empty response");
+        }
 
         try
         {
@@ -566,6 +570,10 @@ public class LocalAiService : BaseLanguageService, ITranslationService, IBatchTr
 
         // Try to extract JSON
         var translatedJson = chatResponse.Choices[0].Message.Content;
+        if (string.IsNullOrWhiteSpace(translatedJson))
+        {
+            throw new TranslationParseException("LocalAI returned an empty response");
+        }
         var jsonStart = translatedJson.IndexOf('[');
         var jsonEnd = translatedJson.LastIndexOf(']');
         if (jsonStart != -1 && jsonEnd != -1 && jsonEnd > jsonStart)
