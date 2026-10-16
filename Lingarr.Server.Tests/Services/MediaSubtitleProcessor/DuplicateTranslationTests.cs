@@ -188,7 +188,8 @@ public class DuplicateTranslationTests : MediaSubtitleProcessorTestBase
             TargetLanguage = "ro",
             SubtitleToTranslate = "/movies/test/test.movie.en.srt",
             MediaType = MediaType.Movie,
-            Status = TranslationStatus.Failed
+            Status = TranslationStatus.Failed,
+            CompletedAt = System.DateTimeOffset.UtcNow.AddHours(-7)
         });
         await DbContext.SaveChangesAsync();
 
@@ -235,7 +236,8 @@ public class DuplicateTranslationTests : MediaSubtitleProcessorTestBase
             TargetLanguage = "ro",
             SubtitleToTranslate = "/movies/test/test.movie.en.srt",
             MediaType = MediaType.Movie,
-            Status = TranslationStatus.Cancelled
+            Status = TranslationStatus.Cancelled,
+            CompletedAt = System.DateTimeOffset.UtcNow.AddHours(-7)
         });
         await DbContext.SaveChangesAsync();
 
