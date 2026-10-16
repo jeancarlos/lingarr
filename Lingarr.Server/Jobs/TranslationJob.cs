@@ -316,6 +316,7 @@ public class TranslationJob
             
             translationRequest.ErrorMessage = ex.Message;
             translationRequest.StackTrace = ex.ToString();
+            translationRequest.CompletedAt = DateTimeOffset.UtcNow;
             await _dbContext.SaveChangesAsync(cancellationToken);
             
             await _eventService.LogEvent(translationRequest.Id, TranslationStatus.Failed, ex.Message);

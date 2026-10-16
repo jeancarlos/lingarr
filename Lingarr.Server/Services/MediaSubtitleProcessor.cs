@@ -21,6 +21,9 @@ public class MediaSubtitleProcessor : IMediaSubtitleProcessor
     private readonly ISettingService _settingService;
     private readonly LingarrDbContext _dbContext;
     private readonly IBazarrService _bazarrService;
+    private static readonly TimeSpan FailedRetryBackoff = TimeSpan.FromHours(6);
+    private static readonly TimeSpan FailureWindow = TimeSpan.FromDays(7);
+    private const int MaxFailuresInWindow = 3;
     private string _hash = string.Empty;
     private IMedia _media = null!;
     private MediaType _mediaType;
@@ -163,6 +166,41 @@ public class MediaSubtitleProcessor : IMediaSubtitleProcessor
         if (!languagesToTranslate.Any())
         {
             await UpdateHash();
+            return false;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var failedStatuses = new[] { TranslationStatus.Failed, TranslationStatus.Cancelled };
+        var recentFailures = (await _dbContext.TranslationRequests
+                .Where(translationRequest => translationRequest.MediaId == _media.Id
+                                             && translationRequest.MediaType == _mediaType
+                                             && failedStatuses.Contains(translationRequest.Status))
+                .Select(translationRequest => new
+                {
+                    translationRequest.TargetLanguage,
+                    FinishedAt = translationRequest.CompletedAt ?? translationRequest.UpdatedAt
+                })
+                .ToListAsync())
+            .Where(failure => failure.FinishedAt > now - FailureWindow)
+            .GroupBy(failure => failure.TargetLanguage)
+            .ToList();
+
+        var exhausted = recentFailures
+            .Where(failures => failures.Count() >= MaxFailuresInWindow)
+            .Select(failures => failures.Key);
+        languagesToTranslate = languagesToTranslate.Except(exhausted).ToList();
+        if (!languagesToTranslate.Any())
+        {
+            await UpdateHash();
+            return false;
+        }
+
+        var coolingDown = recentFailures
+            .Where(failures => failures.Max(failure => failure.FinishedAt) > now - FailedRetryBackoff)
+            .Select(failures => failures.Key);
+        languagesToTranslate = languagesToTranslate.Except(coolingDown).ToList();
+        if (!languagesToTranslate.Any())
+        {
             return false;
         }
 
