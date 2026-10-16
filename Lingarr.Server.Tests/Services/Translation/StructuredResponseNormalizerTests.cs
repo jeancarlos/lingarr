@@ -74,4 +74,16 @@ public class StructuredResponseNormalizerTests
 
         Assert.Equal("{\"translations\":[{\"position\":1,\"line\":\"Olá\"}]}", result);
     }
+
+    [Theory]
+    [InlineData("[{\"position:2,\"line\":\"Oi\"}]")]
+    [InlineData("[{\"position2,\"line\":\"Oi\"}]")]
+    [InlineData("[{\"position\">2,\"line\":\"Oi\"}]")]
+    [InlineData("[{\"position-2,\"line\":\"Oi\"}]")]
+    public void Normalize_MangledPositionKey_IsRepaired(string content)
+    {
+        Assert.Equal(
+            "{\"translations\":[{\"position\":2,\"line\":\"Oi\"}]}",
+            StructuredResponseNormalizer.Normalize(content));
+    }
 }

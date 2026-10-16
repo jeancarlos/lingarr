@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace Lingarr.Server.Services.Translation;
 
 /// <summary>
@@ -17,6 +19,7 @@ public static class StructuredResponseNormalizer
             return content;
         }
 
+        content = RepairKeys(content);
         for (var start = 0; start < content.Length; start++)
         {
             var open = content[start];
@@ -42,6 +45,17 @@ public static class StructuredResponseNormalizer
 
         return content;
     }
+
+    /// <summary>
+    /// Restores a mangled position key such as <c>"position:3,</c>, <c>"position3,</c> or <c>"position"&gt;3,</c>.
+    /// </summary>
+    /// <param name="content">Raw or sliced model output.</param>
+    /// <returns>The content with every position key rewritten as <c>"position":N</c>.</returns>
+    public static string RepairKeys(string content) =>
+        MangledPositionKey.Replace(content, "{\"position\":$1,\"line\":");
+
+    private static readonly Regex MangledPositionKey =
+        new(@"\{\s*""position[^\d{}]{0,4}(\d+)\s*,\s*""line""\s*:", RegexOptions.Compiled);
 
     private static bool IsJson(string candidate)
     {
