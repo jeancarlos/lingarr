@@ -572,6 +572,7 @@ public class LocalAiService : BaseLanguageService, ITranslationService, IBatchTr
         {
             translatedJson = translatedJson.Substring(jsonStart, jsonEnd - jsonStart + 1);
         }
+        translatedJson = StructuredResponseNormalizer.RepairKeys(translatedJson);
 
         try
         {
