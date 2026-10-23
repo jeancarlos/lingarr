@@ -508,9 +508,6 @@ public class LocalAiService : BaseLanguageService, ITranslationService, IBatchTr
 
         try
         {
-            // Cheap gateway models ignore response_format, so narrow the content to JSON first.
-            translatedJson = StructuredResponseNormalizer.Normalize(translatedJson);
-
             // Parse the wrapper object first, extract the translations array
             var responseWrapper = JsonSerializer.Deserialize<JsonElement>(translatedJson);
             if (!responseWrapper.TryGetProperty("translations", out var translationsElement))
@@ -580,7 +577,6 @@ public class LocalAiService : BaseLanguageService, ITranslationService, IBatchTr
         {
             translatedJson = translatedJson.Substring(jsonStart, jsonEnd - jsonStart + 1);
         }
-        translatedJson = StructuredResponseNormalizer.RepairKeys(translatedJson);
 
         try
         {
