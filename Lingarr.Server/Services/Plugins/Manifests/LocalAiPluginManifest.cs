@@ -51,6 +51,9 @@ public sealed class LocalAiPluginManifest : IPluginManifest
             Required = false,
             Default = "true",
             Description = "Sends a JSON schema with batch requests to the chat/completions endpoint. Disable it for endpoints that accept the schema but do not support it, such as DeepSeek models."
+        },
+        new()
+        {
             Key = SettingKeys.Translation.LocalAi.Headers,
             Label = "Custom headers (optional)",
             Type = PluginSettingType.KeyValueList,
