@@ -24,6 +24,7 @@
                     {{ fieldValue === 'true' ? 'Enabled' : 'Disabled' }}
                 </span>
             </ToggleButton>
+        </template>
         <template v-else-if="field.type === PLUGIN_SETTING_TYPE.KEY_VALUE_LIST">
             <label class="mb-1 block text-sm font-semibold" :for="field.key">
                 {{ field.label }}
