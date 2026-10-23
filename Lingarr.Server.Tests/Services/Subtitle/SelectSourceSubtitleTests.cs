@@ -28,18 +28,18 @@ public class SelectSourceSubtitleTests : IDisposable
         var signs = Write("ep.en.2.srt", 10, "2");
         var dialogue = Write("ep.en.srt", 300);
 
-        var selected = _service.SelectSourceSubtitle([signs, dialogue], ["en"], "false");
+        var selected = _service.SelectSourceSubtitle([signs, dialogue], ["en"]);
 
         Assert.Equal(dialogue.Path, selected!.Subtitle.Path);
     }
 
     [Fact]
-    public void SelectSourceSubtitle_IgnoreCaptions_StillPrefersUncaptionedEvenIfSmaller()
+    public void SelectSourceSubtitle_PrefersUncaptionedEvenIfSmaller()
     {
         var sdh = Write("ep.en.sdh.srt", 400, "sdh");
         var plain = Write("ep.en.srt", 300);
 
-        var selected = _service.SelectSourceSubtitle([sdh, plain], ["en"], "true");
+        var selected = _service.SelectSourceSubtitle([sdh, plain], ["en"]);
 
         Assert.Equal(plain.Path, selected!.Subtitle.Path);
     }
